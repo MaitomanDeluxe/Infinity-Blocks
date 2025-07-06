@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Infinity-Blocks</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
   <meta name="theme-color" content="#000000">
@@ -32,16 +32,6 @@
       color: #0f0;
       font-size: 16px;
       text-align: right;
-      font-family: monospace;
-    }
-    #powerbar {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 0%;
-      height: 8px;
-      background: #0ff;
-      transition: width 0.2s;
     }
   </style>
 </head>
@@ -51,7 +41,6 @@
   <div id="score">Score: 0</div>
   <div id="time">Time: 0s</div>
 </div>
-<div id="powerbar"></div>
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -64,9 +53,9 @@ let score = 0;
 let gameTime = 0;
 let boost = false;
 let items = [];
+let powerbarTimer = 0;
 const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f"];
 let animations = [];
-let powerbarTimer = 0;
 
 function createBlocks() {
   blocks = [];
@@ -88,12 +77,12 @@ function createBlocks() {
 }
 createBlocks();
 
-function drawPaddle() {
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   ctx.fillStyle = boost ? `hsl(${gameTime % 360}, 100%, 60%)` : "#0ff";
   ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
-}
 
-function drawBalls() {
   balls.forEach(b => {
     b.trail.push({ x: b.x, y: b.y, age: 0 });
     if (b.trail.length > 10) b.trail.shift();
@@ -111,27 +100,21 @@ function drawBalls() {
     ctx.fillStyle = "#fff";
     ctx.fill();
   });
-}
 
-function drawBlocks() {
   blocks.forEach(b => {
     if (b.active) {
       ctx.fillStyle = b.color;
       ctx.fillRect(b.x, b.y, b.w, b.h);
     }
   });
-}
 
-function drawItems() {
   items.forEach(item => {
     ctx.fillStyle = ["", "#fff", "#f0f", "#0f0"][item.type];
     ctx.beginPath();
     ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
     ctx.fill();
   });
-}
 
-function drawAnimations() {
   animations.forEach((a, i) => {
     ctx.globalAlpha = 1 - a.age / a.life;
     ctx.beginPath();
@@ -143,17 +126,23 @@ function drawAnimations() {
     a.age++;
     if (a.age > a.life) animations.splice(i, 1);
   });
+
+  if (powerbarTimer > 0) {
+    ctx.fillStyle = "#0ff";
+    ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
+    powerbarTimer--;
+  }
+
+  document.getElementById("score").textContent = `Score: ${score}`;
+  document.getElementById("time").textContent = `Time: ${Math.floor(gameTime / 60)}s`;
 }
 
-function movePaddle() {
+function update() {
   const speed = boost ? paddle.dx * 2 : paddle.dx;
   if (left && paddle.x > 0) paddle.x -= speed;
   if (right && paddle.x + paddle.w < canvas.width) paddle.x += speed;
-}
 
-function moveBalls() {
-  balls = balls.filter(ball => ball.y <= canvas.height);
-  balls.forEach(ball => {
+  balls = balls.filter(ball => {
     ball.x += ball.dx;
     ball.y += ball.dy;
 
@@ -169,88 +158,64 @@ function moveBalls() {
         b.active = false;
         score += 10;
         if (b.item) {
-          items.push({ x: b.x + b.w/2, y: b.y, dy: 2, type: b.item });
+          items.push({ x: b.x + b.w / 2, y: b.y, dy: 2, type: b.item });
         }
-        animations.push({ x: b.x + b.w/2, y: b.y + b.h/2, color: b.color, size: 10, age: 0, life: 15 });
+        animations.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, color: b.color, size: 10, age: 0, life: 15 });
         ball.dy *= -1;
       }
     });
-  });
-}
 
-function moveItems() {
+    if (ball.y > canvas.height) {
+      if (powerbarTimer > 0) {
+        ball.dy *= -1;
+        ball.y = canvas.height - 10;
+        return true;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  });
+
   items.forEach((item, i) => {
     item.y += item.dy;
     if (item.y > paddle.y && item.x > paddle.x && item.x < paddle.x + paddle.w) {
       items.splice(i, 1);
       animations.push({ x: item.x, y: item.y, color: "#fff", size: 8, age: 0, life: 20 });
       if (item.type === 1) {
-        // 地面バリア
         powerbarTimer = 240;
       } else if (item.type === 2) {
-        // ボール増加
-        const newBalls = Math.floor(balls.length * 0.5);
+        const newBalls = Math.floor(balls.length);
         for (let j = 0; j < newBalls; j++) {
-          balls.push({ x: paddle.x + paddle.w/2, y: paddle.y - 10, dx: (Math.random() - 0.5) * 6, dy: -3, r: 6, trail: [] });
+          balls.push({
+            x: paddle.x + paddle.w / 2,
+            y: paddle.y - 10,
+            dx: (Math.random() - 0.5) * 6,
+            dy: -3,
+            r: 6,
+            trail: []
+          });
         }
       } else if (item.type === 3) {
-        // ランダム1行削除
         const y = Math.floor(Math.random() * rows);
-        for (let j = 0; j < cols; j++) blocks[y * cols + j].active = false;
+        for (let j = 0; j < cols; j++) {
+          const b = blocks[y * cols + j];
+          b.active = false;
+          animations.push({
+            x: b.x + b.w / 2,
+            y: b.y + b.h / 2,
+            color: b.color,
+            size: 12,
+            age: 0,
+            life: 15
+          });
+        }
       }
     }
   });
-}
 
-function slideBlocksIfCleared() {
-  for (let y = 0; y < rows; y++) {
-    const start = y * cols;
-    const end = start + cols;
-    if (blocks.slice(start, end).every(b => !b.active)) {
-      for (let i = start - 1; i >= 0; i--) {
-        blocks[i + cols].active = blocks[i].active;
-        blocks[i + cols].color = blocks[i].color;
-        blocks[i + cols].item = blocks[i].item;
-      }
-      for (let i = 0; i < cols; i++) {
-        blocks[i] = {
-          x: (i % cols) * 64 + 4,
-          y: 40,
-          w: blockW,
-          h: blockH,
-          active: true,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          item: Math.random() < 0.2 ? 1 : 0
-        };
-        animations.push({ x: blocks[i].x + 30, y: blocks[i].y + 12, color: blocks[i].color, size: 6, age: 0, life: 15 });
-      }
-    }
-  }
-}
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  drawPaddle();
-  drawBalls();
-  drawBlocks();
-  drawItems();
-  drawAnimations();
-  if (powerbarTimer > 0) {
-    ctx.fillStyle = "#0ff";
-    ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
-    powerbarTimer--;
-  }
-  document.getElementById("score").textContent = `Score: ${score}`;
-  document.getElementById("time").textContent = `Time: ${Math.floor(gameTime / 60)}s`;
-}
-
-function update() {
-  movePaddle();
-  moveBalls();
-  moveItems();
-  slideBlocksIfCleared();
-  draw();
   gameTime++;
+  draw();
   requestAnimationFrame(update);
 }
 
