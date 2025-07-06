@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Infinity-Blocks</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background: linear-gradient(to bottom, #111, #222);
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = 480;
+canvas.height = 640;
+
+const paddle = { x: 190, y: 600, w: 100, h: 10, dx: 5 };
+let balls = [{ x: 240, y: 300, dx: 3, dy: -3, r: 5 }];
+let blocks = [];
+let rows = 6, cols = 10, blockW = 46, blockH = 20;
+
+function createBlocks() {
+  blocks = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      blocks.push({ x: x * 48 + 2, y: y * 22 + 40, w: blockW, h: blockH, active: true });
+    }
+  }
+}
+createBlocks();
+
+function drawPaddle() {
+  ctx.fillStyle = "#0ff";
+  ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+}
+
+function drawBalls() {
+  ctx.fillStyle = "#ff0";
+  balls.forEach(b => {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawBlocks() {
+  blocks.forEach(b => {
+    if (b.active) {
+      ctx.fillStyle = "#0f0";
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    }
+  });
+}
+
+function movePaddle() {
+  if (left && paddle.x > 0) paddle.x -= paddle.dx;
+  if (right && paddle.x + paddle.w < canvas.width) paddle.x += paddle.dx;
+}
+
+function moveBalls() {
+  balls.forEach(ball => {
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.dx *= -1;
+    if (ball.y < ball.r) ball.dy *= -1;
+    if (ball.y > canvas.height) ball.y = 300;
+
+    // Paddle collision
+    if (ball.y + ball.r > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
+      ball.dy *= -1;
+    }
+
+    // Block collision
+    blocks.forEach(b => {
+      if (b.active && ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
+        b.active = false;
+        ball.dy *= -1;
+      }
+    });
+  });
+}
+
+function slideBlocksIfCleared() {
+  for (let y = 0; y < rows; y++) {
+    const start = y * cols;
+    const end = start + cols;
+    if (blocks.slice(start, end).every(b => !b.active)) {
+      // Slide
+      for (let i = start - 1; i >= 0; i--) {
+        blocks[i + cols].active = blocks[i].active;
+      }
+      for (let i = 0; i < cols; i++) {
+        blocks[i].active = true; // New line
+      }
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPaddle();
+  drawBalls();
+  drawBlocks();
+}
+
+function update() {
+  movePaddle();
+  moveBalls();
+  slideBlocksIfCleared();
+  draw();
+  requestAnimationFrame(update);
+}
+
+let left = false, right = false;
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") left = true;
+  if (e.key === "ArrowRight") right = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft") left = false;
+  if (e.key === "ArrowRight") right = false;
+});
+
+update();
+</script>
+</body>
+</html>
