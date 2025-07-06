@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Infinity-Blocks</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
   <meta name="theme-color" content="#000000">
@@ -16,8 +16,7 @@
       margin: 0;
       padding: 0;
       background: #000;
-      color: #0f0;
-      font-family: monospace;
+      font-family: 'Orbitron', sans-serif;
       overflow: hidden;
     }
     canvas {
@@ -33,205 +32,248 @@
       font-size: 16px;
       text-align: right;
     }
+    #titleScreen {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, #222 0%, #000 100%);
+      color: #0ff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 32px;
+      z-index: 10;
+    }
+    #titleScreen h1 {
+      font-size: 64px;
+      color: #f0f;
+      text-shadow: 0 0 20px #f0f;
+      margin-bottom: 40px;
+    }
+    #startBtn, #retryBtn {
+      background: #0ff;
+      color: #000;
+      border: none;
+      padding: 16px 32px;
+      font-size: 24px;
+      cursor: pointer;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #0ff;
+    }
+    #retryBtn {
+      display: none;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
+<div id="titleScreen">
+  <h1>Infinity-Blocks</h1>
+  <button id="startBtn">GAME START</button>
+  <button id="retryBtn">RETRY</button>
+</div>
 <canvas id="game" width="640" height="720"></canvas>
 <div id="hud">
   <div id="score">Score: 0</div>
   <div id="time">Time: 0s</div>
 </div>
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+let gameStarted = false;
+document.getElementById("startBtn").onclick = () => {
+  document.getElementById("titleScreen").style.display = "none";
+  if (!gameStarted) startGame();
+};
+document.getElementById("retryBtn").onclick = () => {
+  location.reload();
+};
 
-const paddle = { x: 270, y: 680, w: 120, h: 12, dx: 5 };
-let balls = [{ x: 320, y: 300, dx: 3, dy: -3, r: 6, trail: [] }];
-let blocks = [];
-let rows = 6, cols = 10, blockW = 60, blockH = 24;
-let score = 0;
-let gameTime = 0;
-let boost = false;
-let items = [];
-let powerbarTimer = 0;
-const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f"];
-let animations = [];
+function gameOver() {
+  document.getElementById("titleScreen").style.display = "flex";
+  document.getElementById("startBtn").style.display = "none";
+  document.getElementById("retryBtn").style.display = "block";
+}
 
-function createBlocks() {
-  blocks = [];
-  const itemFreq = balls.length >= 20 ? 11 : balls.length >= 10 ? 8 : 5;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const rand = Math.floor(Math.random() * itemFreq);
-      blocks.push({
-        x: x * 64 + 4,
-        y: y * 26 + 40,
-        w: blockW,
-        h: blockH,
-        active: true,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        item: rand === 0 ? Math.floor(Math.random() * 3) + 1 : 0
-      });
+function startGame() {
+  gameStarted = true;
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const paddle = { x: 270, y: 680, w: 120, h: 12, dx: 5 };
+  let balls = [{ x: 320, y: 300, dx: 3, dy: -3, r: 6, trail: [] }];
+  let blocks = [], rows = 6, cols = 10, blockW = 60, blockH = 24;
+  let score = 0, gameTime = 0, boost = false, items = [], powerbarTimer = 0;
+  let animations = [];
+  const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f"];
+
+  function createBlocks() {
+    blocks = [];
+    const itemFreq = balls.length >= 20 ? 11 : balls.length >= 10 ? 8 : 2;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const rand = Math.floor(Math.random() * itemFreq);
+        blocks.push({
+          x: x * 64 + 4,
+          y: y * 26 + 40,
+          w: blockW,
+          h: blockH,
+          active: true,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          item: rand === 0 ? Math.floor(Math.random() * 3) + 1 : 0
+        });
+      }
     }
   }
-}
-createBlocks();
+  createBlocks();
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  let left = false, right = false;
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") left = true;
+    if (e.key === "ArrowRight") right = true;
+    if (e.key === "z") boost = true;
+  });
+  document.addEventListener("keyup", e => {
+    if (e.key === "ArrowLeft") left = false;
+    if (e.key === "ArrowRight") right = false;
+    if (e.key === "z") boost = false;
+  });
 
-  ctx.fillStyle = boost ? `hsl(${gameTime % 360}, 100%, 60%)` : "#0ff";
-  ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
-
-  balls.forEach(b => {
-    b.trail.push({ x: b.x, y: b.y, age: 0 });
-    if (b.trail.length > 10) b.trail.shift();
-    for (let i = 0; i < b.trail.length; i++) {
-      const t = b.trail[i];
-      ctx.globalAlpha = (i + 1) / b.trail.length / 2;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = boost ? `hsl(${gameTime % 360}, 100%, 60%)` : "#0ff";
+    ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    balls.forEach(b => {
+      b.trail.push({ x: b.x, y: b.y, age: 0 });
+      if (b.trail.length > 10) b.trail.shift();
+      for (let i = 0; i < b.trail.length; i++) {
+        const t = b.trail[i];
+        ctx.globalAlpha = (i + 1) / b.trail.length / 2;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, b.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#ff0";
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
       ctx.beginPath();
-      ctx.arc(t.x, t.y, b.r, 0, Math.PI * 2);
-      ctx.fillStyle = "#ff0";
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
       ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
-  });
-
-  blocks.forEach(b => {
-    if (b.active) {
-      ctx.fillStyle = b.color;
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-    }
-  });
-
-  items.forEach(item => {
-    ctx.fillStyle = ["", "#fff", "#f0f", "#0f0"][item.type];
-    ctx.beginPath();
-    ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  animations.forEach((a, i) => {
-    ctx.globalAlpha = 1 - a.age / a.life;
-    ctx.beginPath();
-    ctx.arc(a.x, a.y, a.size + a.age * 2, 0, Math.PI * 2);
-    ctx.strokeStyle = a.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    a.age++;
-    if (a.age > a.life) animations.splice(i, 1);
-  });
-
-  if (powerbarTimer > 0) {
-    ctx.fillStyle = "#0ff";
-    ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
-    powerbarTimer--;
-  }
-
-  document.getElementById("score").textContent = `Score: ${score}`;
-  document.getElementById("time").textContent = `Time: ${Math.floor(gameTime / 60)}s`;
-}
-
-function update() {
-  const speed = boost ? paddle.dx * 2 : paddle.dx;
-  if (left && paddle.x > 0) paddle.x -= speed;
-  if (right && paddle.x + paddle.w < canvas.width) paddle.x += speed;
-
-  balls = balls.filter(ball => {
-    ball.x += ball.dx;
-    ball.y += ball.dy;
-
-    if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.dx *= -1;
-    if (ball.y < ball.r) ball.dy *= -1;
-
-    if (ball.y + ball.r > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.w) {
-      ball.dy *= -1;
-    }
-
+    });
     blocks.forEach(b => {
-      if (b.active && ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
-        b.active = false;
-        score += 10;
-        if (b.item) {
-          items.push({ x: b.x + b.w / 2, y: b.y, dy: 2, type: b.item });
-        }
-        animations.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, color: b.color, size: 10, age: 0, life: 15 });
-        ball.dy *= -1;
+      if (b.active) {
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
       }
     });
-
-    if (ball.y > canvas.height) {
-      if (powerbarTimer > 0) {
-        ball.dy *= -1;
-        ball.y = canvas.height - 10;
-        return true;
-      } else {
-        return false;
-      }
+    items.forEach(item => {
+      ctx.fillStyle = ["", "#fff", "#f0f", "#0f0"][item.type];
+      ctx.beginPath();
+      ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    animations.forEach((a, i) => {
+      ctx.globalAlpha = 1 - a.age / a.life;
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.size + a.age * 2, 0, Math.PI * 2);
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      a.age++;
+      if (a.age > a.life) animations.splice(i, 1);
+    });
+    if (powerbarTimer > 0) {
+      ctx.fillStyle = "#0ff";
+      ctx.fillRect(0, canvas.height - 5, canvas.width, 5);
+      powerbarTimer--;
     }
-    return true;
-  });
+    document.getElementById("score").textContent = `Score: ${score}`;
+    document.getElementById("time").textContent = `Time: ${Math.floor(gameTime / 60)}s`;
+  }
 
-  items.forEach((item, i) => {
-    item.y += item.dy;
-    if (item.y > paddle.y && item.x > paddle.x && item.x < paddle.x + paddle.w) {
-      items.splice(i, 1);
-      animations.push({ x: item.x, y: item.y, color: "#fff", size: 8, age: 0, life: 20 });
-      if (item.type === 1) {
-        powerbarTimer = 240;
-      } else if (item.type === 2) {
-        const newBalls = Math.floor(balls.length);
-        for (let j = 0; j < newBalls; j++) {
-          balls.push({
-            x: paddle.x + paddle.w / 2,
-            y: paddle.y - 10,
-            dx: (Math.random() - 0.5) * 6,
-            dy: -3,
-            r: 6,
-            trail: []
-          });
-        }
-      } else if (item.type === 3) {
-        const y = Math.floor(Math.random() * rows);
-        for (let j = 0; j < cols; j++) {
-          const b = blocks[y * cols + j];
+  function update() {
+    const speed = boost ? paddle.dx * 2 : paddle.dx;
+    if (left && paddle.x > 0) paddle.x -= speed;
+    if (right && paddle.x + paddle.w < canvas.width) paddle.x += speed;
+    balls = balls.filter(ball => {
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+      if (ball.x < ball.r || ball.x > canvas.width - ball.r) ball.dx *= -1;
+      if (ball.y < ball.r) ball.dy *= -1;
+      if (ball.y + ball.r > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.w) ball.dy *= -1;
+      blocks.forEach(b => {
+        if (b.active && ball.x > b.x && ball.x < b.x + b.w && ball.y > b.y && ball.y < b.y + b.h) {
           b.active = false;
-          animations.push({
-            x: b.x + b.w / 2,
-            y: b.y + b.h / 2,
-            color: b.color,
-            size: 12,
-            age: 0,
-            life: 15
-          });
+          score += 10;
+          if (b.item) items.push({ x: b.x + b.w / 2, y: b.y, dy: 2, type: b.item });
+          animations.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, color: b.color, size: 10, age: 0, life: 15 });
+          ball.dy *= -1;
+        }
+      });
+      if (ball.y > canvas.height) {
+        if (powerbarTimer > 0) {
+          ball.dy *= -1;
+          ball.y = canvas.height - 10;
+          return true;
+        } else {
+          return false;
         }
       }
+      return true;
+    });
+    items.forEach((item, i) => {
+      item.y += item.dy;
+      if (item.y > paddle.y && item.x > paddle.x && item.x < paddle.x + paddle.w) {
+        items.splice(i, 1);
+        animations.push({ x: item.x, y: item.y, color: "#fff", size: 8, age: 0, life: 20 });
+        if (item.type === 1) powerbarTimer = 240;
+        else if (item.type === 2) {
+          const newBalls = Math.floor(balls.length);
+          for (let j = 0; j < newBalls; j++) {
+            balls.push({
+              x: paddle.x + paddle.w / 2,
+              y: paddle.y - 10,
+              dx: (Math.random() - 0.5) * 6,
+              dy: -3,
+              r: 6,
+              trail: []
+            });
+          }
+        } else if (item.type === 3) {
+          const bottomY = rows - 1;
+          for (let j = 0; j < cols; j++) {
+            const b = blocks[bottomY * cols + j];
+            b.active = false;
+            animations.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, color: b.color, size: 12, age: 0, life: 15 });
+          }
+          for (let i = blocks.length - cols - 1; i >= 0; i--) {
+            blocks[i + cols].active = blocks[i].active;
+            blocks[i + cols].color = blocks[i].color;
+            blocks[i + cols].item = blocks[i].item;
+          }
+          for (let i = 0; i < cols; i++) {
+            blocks[i] = {
+              x: (i % cols) * 64 + 4,
+              y: 40,
+              w: blockW,
+              h: blockH,
+              active: true,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              item: Math.random() < 0.5 ? Math.floor(Math.random() * 3) + 1 : 0
+            };
+          }
+        }
+      }
+    });
+    gameTime++;
+    if (balls.length === 0) {
+      gameOver();
+      return;
     }
-  });
-
-  gameTime++;
-  draw();
-  requestAnimationFrame(update);
+    draw();
+    requestAnimationFrame(update);
+  }
+  update();
 }
-
-let left = false, right = false;
-document.addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft") left = true;
-  if (e.key === "ArrowRight") right = true;
-  if (e.key === "z") boost = true;
-});
-document.addEventListener("keyup", e => {
-  if (e.key === "ArrowLeft") left = false;
-  if (e.key === "ArrowRight") right = false;
-  if (e.key === "z") boost = false;
-});
-
-update();
 </script>
 </body>
 </html>
