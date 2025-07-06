@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Infinity-Blocks</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
   <meta name="theme-color" content="#000000">
@@ -55,6 +55,7 @@ let gameTime = 0;
 let boost = false;
 let items = [];
 const colors = ["#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f"];
+let animations = [];
 
 function createBlocks() {
   blocks = [];
@@ -107,6 +108,20 @@ function drawItems() {
   });
 }
 
+function drawAnimations() {
+  animations.forEach((a, i) => {
+    ctx.globalAlpha = 1 - a.age / a.life;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, a.size + a.age * 2, 0, Math.PI * 2);
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    a.age++;
+    if (a.age > a.life) animations.splice(i, 1);
+  });
+}
+
 function movePaddle() {
   const speed = boost ? paddle.dx * 2 : paddle.dx;
   if (left && paddle.x > 0) paddle.x -= speed;
@@ -133,6 +148,7 @@ function moveBalls() {
         if (b.item) {
           items.push({ x: b.x + b.w/2, y: b.y, dy: 2 });
         }
+        animations.push({ x: b.x + b.w/2, y: b.y + b.h/2, color: b.color, size: 10, age: 0, life: 15 });
         ball.dy *= -1;
       }
     });
@@ -146,6 +162,7 @@ function moveItems() {
       items.splice(i, 1);
       balls.push({ x: paddle.x + paddle.w/2, y: paddle.y - 10, dx: 3, dy: -3, r: 6 });
       balls.push({ x: paddle.x + paddle.w/2, y: paddle.y - 10, dx: -3, dy: -3, r: 6 });
+      animations.push({ x: item.x, y: item.y, color: "#fff", size: 8, age: 0, life: 20 });
       score += 50;
     }
   });
@@ -171,6 +188,7 @@ function slideBlocksIfCleared() {
           color: colors[Math.floor(Math.random() * colors.length)],
           item: Math.random() < 0.2
         };
+        animations.push({ x: blocks[i].x + 30, y: blocks[i].y + 12, color: blocks[i].color, size: 6, age: 0, life: 15 });
       }
     }
   }
@@ -182,6 +200,7 @@ function draw() {
   drawBalls();
   drawBlocks();
   drawItems();
+  drawAnimations();
   document.getElementById("score").textContent = `Score: ${score}`;
   document.getElementById("time").textContent = `Time: ${Math.floor(gameTime / 60)}s`;
 }
